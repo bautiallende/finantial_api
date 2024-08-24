@@ -13,91 +13,78 @@ def get_sheet(sheet_name):
 
 
 
-def obtener_precio_yahoo(ticker):
-    print(f"Obteniendo precio actual para {ticker} desde Yahoo Finance...")
+
+def obtener_datos_yahoo(ticker, datos):
+    print(f"Iniciando scraping para {ticker}...")
+    
     url = f"https://finance.yahoo.com/quote/{ticker}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
     
-    response = requests.get(url, headers=headers)
-    print(f"Respuesta recibida de {url}, estatus: {response.status_code}")
-    soup = BeautifulSoup(response.text, 'html.parser')
-    
-    # Log para verificar el HTML recibido
-    print(f"HTML recibido para {ticker}: {soup.prettify()[:500]}")
-    
-    # Scraping del precio actual
-    precio_actual = soup.find("fin-streamer", {"data-field": "regularMarketPrice"})
-    if precio_actual:
-        print(f"Precio actual encontrado para {ticker}: {precio_actual.text}")
-        return precio_actual.text
-    else:
-        print(f"No se pudo encontrar el precio para {ticker}")
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Esto lanzará un error si la respuesta no es 200 OK
+    except requests.exceptions.HTTPError as http_err:
+        print(f"Error HTTP al intentar acceder a {ticker}: {http_err}")
+        return None
+    except requests.exceptions.ConnectionError as conn_err:
+        print(f"Error de conexión al intentar acceder a {ticker}: {conn_err}")
+        return None
+    except requests.exceptions.Timeout as timeout_err:
+        print(f"Tiempo de espera agotado al intentar acceder a {ticker}: {timeout_err}")
+        return None
+    except requests.exceptions.RequestException as req_err:
+        print(f"Error inesperado al intentar acceder a {ticker}: {req_err}")
         return None
 
-def obtener_dato_yahoo(ticker, data_field):
-    url = f"https://finance.yahoo.com/quote/{ticker}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
-    
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    
-    dato = soup.find("fin-streamer", {"data-field": data_field})
-    if dato:
-        return dato.text
-    else:
-        print(f"No se pudo encontrar {data_field} para {ticker}")
-
-        # Intentar obtener el rango completo si no se encuentra un dato específico
-        if data_field in ["regularMarketDayLow", "regularMarketDayHigh"]:
-            rango = soup.find("fin-streamer", {"data-field": "regularMarketDayRange"})
-            if rango:
-                try:
+    try:
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        resultados = {}
+        for key, value in datos.items():
+            elemento = soup.find("fin-streamer", value)
+            if elemento:
+                resultados[key] = elemento.text
+            elif key in ["precio_minimo", "precio_maximo"]:
+                rango = soup.find("fin-streamer", {"data-field": "regularMarketDayRange"})
+                if rango:
                     minimo, maximo = rango.text.split(" - ")
-                    return minimo if data_field == "regularMarketDayLow" else maximo
-                except ValueError:
-                    print(f"No se pudo dividir el rango para {ticker}")
-                    return None
+                    resultados[key] = minimo if key == "precio_minimo" else maximo
+                else:
+                    resultados[key] = None
+            else:
+                resultados[key] = None
+        
+        # Extract additional information
+        nombre_completo = soup.find("h1", class_="yf-3a2v0c").text if soup.find("h1", class_="yf-3a2v0c") else None
+        mercado_moneda = soup.find("span", class_="exchange yf-1fo0o81").text if soup.find("span", class_="exchange yf-1fo0o81") else None
+        if mercado_moneda:
+            mercado = mercado_moneda.split(" - ")[0].strip()
+            moneda = mercado_moneda.split("•")[-1].strip()
+        else:
+            mercado, moneda = None, None
+
+        resultados.update({
+            "nombre_completo": nombre_completo,
+            "mercado": mercado,
+            "moneda": moneda,
+            "fuente": "Yahoo Finance"
+        })
+        
+        return resultados
+    
+    except AttributeError as attr_err:
+        print(f"Error de atributo al procesar {ticker}: {attr_err}")
+        return None
+    except Exception as err:
+        print(f"Error inesperado al procesar {ticker}: {err}")
         return None
 
-def obtener_nombre_completo(ticker):
-    url = f"https://finance.yahoo.com/quote/{ticker}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
-    
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    
-    try:
-        nombre_completo = soup.find("h1", class_="yf-3a2v0c").text
-        nombre_completo = nombre_completo.split(" (")[0]  # Eliminar el ticker del nombre
-        return nombre_completo
-    except AttributeError:
-        print(f"No se pudo encontrar el nombre completo para {ticker}")
-        return None
 
-def obtener_mercado_moneda(ticker):
-    url = f"https://finance.yahoo.com/quote/{ticker}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
-    
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    
-    try:
-        mercado_moneda = soup.find("span", class_="exchange yf-1fo0o81").text
-        mercado = mercado_moneda.split(" - ")[0].strip()  # Eliminar "Delayed Quote"
-        moneda = mercado_moneda.split("•")[-1].strip()  # Captura la moneda después del punto medio
-        return mercado, moneda
-    except AttributeError:
-        print(f"No se pudo encontrar el mercado y la moneda para {ticker}")
-        return None, None
+
 
 def obtener_fecha_actual():
     from datetime import datetime
-    return datetime.now().strftime('%d/%m/%Y')
+    return datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+

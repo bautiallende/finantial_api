@@ -1,6 +1,6 @@
 from Sheets.cotizaciones import actualizar_cotizaciones
 # from seguimiento_activos import actualizar_seguimiento_activos
-# from proyeccion_inversiones import actualizar_proyeccion_inversiones
+from Sheets.proyeccion_inversiones import obtener_datos_bono_rava
 # from analisis_activos import actualizar_analisis_activos
 
 def main():
@@ -11,7 +11,7 @@ def main():
     #actualizar_seguimiento_activos()
 
     #print("Actualizando proyección de inversiones...")
-    #actualizar_proyeccion_inversiones()
+    #obtener_datos_bono_rava("GD30")
 
     #print("Actualizando análisis de activos...")
     #actualizar_analisis_activos()

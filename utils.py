@@ -3,6 +3,16 @@ from oauth2client.service_account import ServiceAccountCredentials
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+import json
+
+
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+
+
+
 
 def get_sheet(sheet_name):
     scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
@@ -83,8 +93,92 @@ def obtener_datos_yahoo(ticker, datos):
 
 
 
-
 def obtener_fecha_actual():
     from datetime import datetime
     return datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+
+
+
+def obtener_cotizacion_dolar():
+    url = "https://www.cronista.com/MercadosOnline/moneda.html?id=ARSMEP"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    
+    # Hacer la solicitud HTTP a la página
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        print(f"Error al acceder a la página: {response.status_code}")
+        return None, None
+    
+    # Parsear el contenido HTML
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    # Obtener el valor de compra
+    valor_compra = soup.find("div", text="Valor de compra").find_next("div", class_="val").text
+    valor_compra = float(valor_compra.replace("$", "").replace(".", "").replace(",", "."))
+    
+    # Obtener el valor de venta
+    valor_venta = soup.find("div", text="Valor de venta").find_next("div", class_="val").text
+    valor_venta = float(valor_venta.replace("$", "").replace(".", "").replace(",", "."))
+    
+    fuente_dolar = 'El Cronista'
+
+    return valor_compra, valor_venta, fuente_dolar
+
+
+def convertir_a_numero(valor):
+    try:
+        return float(valor.replace(".", "").replace(",", "."))
+    except ValueError:
+        return None
+
+
+
+def obtener_datos_bono(bono):
+    url = f"https://bonos.ecovalores.com.ar/eco/ticker.php?t={bono}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+
+    # Hacer la solicitud HTTP a la página
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        print(f"Error al acceder a la página: {response.status_code}")
+        return None
+
+    # Parsear el contenido HTML
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    # Extraer los datos de interés
+    bonos = {}
+    bonos["precio_actual"] = soup.find("td", class_="precioticker").text.strip()
+    print(f'precio actual: {bonos["precio_actual"]}')
+    bonos["variacion_diaria"] = soup.find("td", class_="varticker").text.strip()
+    bonos["nombre_completo"] = soup.find("td", class_="tituloticker").text.strip()
+    bonos["moneda"] = soup.find("a", href="listado.php?moneda=dolar").text.strip()
+
+    indicadores = soup.find_all("td", class_="indicticker")
+    indicadores_valores = soup.find_all("td", class_="indicticker2")
+    
+    for ind, val in zip(indicadores, indicadores_valores):
+        texto = ind.text.strip().lower()
+        if "cierre" in texto:
+            bonos["precio_cierre"] = val.text.strip()
+        elif "apertura" in texto:
+            bonos["precio_apertura"] = val.text.strip()
+        elif "máximo" in texto:
+            bonos["precio_maximo"] = val.text.strip()
+        elif "mínimo" in texto:
+            bonos["precio_minimo"] = val.text.strip()
+        elif "volumen" in texto:
+            bonos["volumen"] = val.text.strip()
+
+    # Suponiendo que la moneda es siempre ARS y el mercado es BYMA para este caso:
+    bonos["mercado"] = ""
+    bonos["fuente"] = "Eco Valores"
+
+    return bonos
+
+    
 

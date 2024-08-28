@@ -1,6 +1,6 @@
 import gspread
 from utils import get_sheet, obtener_fecha_actual, obtener_datos_yahoo, obtener_cotizacion_dolar, obtener_datos_bono
-
+import time
 
 
 def actualizar_cotizaciones():
@@ -19,9 +19,9 @@ def actualizar_cotizaciones():
         if valor_compra and valor_venta:
             sheet.update_cell(i, 13, valor_compra)
             sheet.update_cell(i, 14, valor_venta) 
-            sheet.update_cell(i, 18, fuente_dolar)
+            sheet.update_cell(i, 19, fuente_dolar)
 
-        if activo.lower() == "acciones":
+        if activo.lower() == "accion":
             print(f"Procesando {ticker} - {activo}")
 
             # Diccionario para mapear los datos que queremos extraer
@@ -57,10 +57,12 @@ def actualizar_cotizaciones():
                 # Actualizar la celda solo si tenemos un valor válido
                 if fecha:
                     sheet.update_cell(i, 1, fecha)
+                sheet.update_cell(i, 2, ticker)
                 if nombre_completo:
                     sheet.update_cell(i, 3, nombre_completo)
                 if mercado:
                     sheet.update_cell(i, 4, mercado)
+                sheet.update_cell(i, 5, activo)
                 if moneda:
                     sheet.update_cell(i, 6, moneda)
                 if precio_apertura:
@@ -80,12 +82,15 @@ def actualizar_cotizaciones():
                         sheet.update_cell(i, 11, cotizacion_moneda_local)
                         if valor_venta:
                             sheet.update_cell(i, 12, cotizacion_moneda_local/valor_venta)
+                    if precio_cierre:
+                        sheet.update_cell(i, 17, ((cotizacion_moneda_local - precio_cierre) / precio_cierre) )
                 if volumen:
                     sheet.update_cell(i, 15, volumen)
                 if variacion_diaria:
                     sheet.update_cell(i, 16, variacion_diaria)
                 if fuente:
-                    sheet.update_cell(i, 17, fuente)
+                    sheet.update_cell(i, 18, fuente)
+                print(f"Actualizado {ticker} - {activo}")
         elif activo.lower() == "bono":
             # Implementación para actualizar información de bonos
             print(f"Procesando {ticker} - {activo}")
@@ -112,10 +117,12 @@ def actualizar_cotizaciones():
                 # Actualizar la celda solo si tenemos un valor válido
                 if fecha:
                     sheet.update_cell(i, 1, fecha)
+                sheet.update_cell(i, 2, ticker)
                 if nombre_completo:
                     sheet.update_cell(i, 3, nombre_completo)
                 if mercado:
                     sheet.update_cell(i, 4, mercado)
+                sheet.update_cell(i, 5, activo)
                 if moneda:
                     sheet.update_cell(i, 6, moneda)
                 if precio_apertura:
@@ -136,29 +143,55 @@ def actualizar_cotizaciones():
                     #     sheet.update_cell(i, 11, cotizacion_moneda_local)
                     #     if valor_venta:
                     #         sheet.update_cell(i, 12, cotizacion_moneda_local/valor_venta)
+                    if precio_cierre:
+                        sheet.update_cell(i, 17, ((cotizacion_moneda_local - precio_cierre) / precio_cierre))
                 if volumen:
                     sheet.update_cell(i, 15, volumen)
                 if variacion_diaria:
                     sheet.update_cell(i, 16, variacion_diaria)
                 if fuente:
-                    sheet.update_cell(i, 17, fuente)
+                    sheet.update_cell(i, 18, fuente)
 
             
 
         else:
             print(f"Omitiendo {ticker} - {activo} (no es una acción)")
+        time.sleep(2)
+
+
+
+def guardar_datos_historicos(datos):
+    # Obtener la hoja "Históricos"
+    sheet = get_sheet("Históricos")
+
+    # Añadir los datos al final de la hoja
+    last_row = len(sheet.col_values(1)) + 1  # Encuentra la última fila para agregar nuevos datos
+    sheet.insert_row(datos, last_row)
+
+
+
 
 def obtener_tipo_cambio():
     # Aquí puedes implementar una función para obtener el tipo de cambio del dólar MEP
     return 945.2586  # Ejemplo estático; puedes actualizarlo dinámicamente
+
 
 def calcular_variacion_diaria(cierre_anterior, precio_actual):
     if cierre_anterior and precio_actual:
         return round(((precio_actual - cierre_anterior) / cierre_anterior) * 100, 2)
     return 0.0
 
-def convertir_a_numero(valor, separador=","):
+
+def convertir_a_numero(valor, decimal_separator="."):
     try:
-        return float(valor.replace(separador, ""))
+        # Eliminar caracteres no numéricos, excepto puntos y comas
+        valor = valor.replace(" ", "").replace("$", "")
+        if decimal_separator == ",":
+            valor = valor.replace(".", "").replace(",", ".")
+        else:
+            valor = valor.replace(",", "")
+        return float(valor)
     except ValueError:
         return valor
+    
+

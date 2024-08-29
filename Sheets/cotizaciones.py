@@ -1,6 +1,6 @@
 import gspread
-from utils import get_sheet, obtener_fecha_actual, obtener_datos_yahoo
-
+from utils import get_sheet, obtener_fecha_actual, obtener_datos_yahoo, obtener_cotizacion_dolar, obtener_datos_bono
+import time
 
 
 def actualizar_cotizaciones():
@@ -15,7 +15,20 @@ def actualizar_cotizaciones():
 
     # Iterar sobre cada ticker y actualizar la información
     for i, (ticker, activo) in enumerate(zip(tickers, activos), start=8):
-        if activo.lower() == "acciones":
+        valor_compra, valor_venta, fuente_dolar = obtener_cotizacion_dolar()
+
+        # Construir una lista para actualizar en bloque
+        fila_actualizar = [""] * 19
+        # Actualizar los valores comunes de la fila
+        fila_actualizar[0] = obtener_fecha_actual()  # Fecha
+        fila_actualizar[1] = ticker  # Ticker
+        if valor_compra and valor_venta:    
+            fila_actualizar[12] = convertir_a_numero(valor_compra)  # Tipo de Cambio Compra
+            fila_actualizar[13] = convertir_a_numero(valor_venta)  # Tipo de Cambio Venta
+            fila_actualizar[18] = fuente_dolar  # Fuente del Dólar
+
+
+        if activo.lower() == "accion":
             print(f"Procesando {ticker} - {activo}")
 
             # Diccionario para mapear los datos que queremos extraer
@@ -30,60 +43,128 @@ def actualizar_cotizaciones():
                 }
 
             resultados = obtener_datos_yahoo(ticker, datos)
+            
 
             if resultados:
-                fecha = obtener_fecha_actual()
-                nombre_completo = resultados.get("nombre_completo","")
-                mercado = resultados.get("mercado","") 
-                moneda = resultados.get("moneda","")
-                precio_apertura = convertir_a_numero(resultados.get("precio_apertura", ""))
-                precio_cierre = convertir_a_numero(resultados.get("precio_cierre", ""))
-                precio_minimo = convertir_a_numero(resultados.get("precio_minimo", ""))
-                precio_maximo = convertir_a_numero(resultados.get("precio_maximo", ""))
+                fila_actualizar[2] = resultados.get("nombre_completo", "")
+                fila_actualizar[3] = resultados.get("mercado", "")
+                fila_actualizar[4] = activo
+                fila_actualizar[5] = resultados.get("moneda", "")
+                fila_actualizar[6] = convertir_a_numero(resultados.get("precio_apertura", ""))
+                fila_actualizar[7] = convertir_a_numero(resultados.get("precio_cierre", ""))
+                fila_actualizar[8] = convertir_a_numero(resultados.get("precio_minimo", ""))
+                fila_actualizar[9] = convertir_a_numero(resultados.get("precio_maximo", ""))
+
                 cotizacion_moneda_local = convertir_a_numero(resultados.get("precio_actual", ""))
-                volumen = convertir_a_numero(resultados.get("volumen", ""))
-                variacion_diaria = convertir_a_numero(resultados.get("variacion_diaria", ""))
-                fuente = resultados.get("fuente", "")
-                
-                # Actualizar la celda solo si tenemos un valor válido
-                if fecha:
-                    sheet.update_cell(i, 1, fecha)
-                if nombre_completo:
-                    sheet.update_cell(i, 3, nombre_completo)
-                if mercado:
-                    sheet.update_cell(i, 4, mercado)
-                if moneda:
-                    sheet.update_cell(i, 6, moneda)
-                if precio_apertura:
-                    sheet.update_cell(i, 7, precio_apertura)
-                if precio_cierre:
-                    sheet.update_cell(i, 8, precio_cierre)
-                if precio_minimo:
-                    sheet.update_cell(i, 9, precio_minimo)
-                if precio_maximo:
-                    sheet.update_cell(i, 10, precio_maximo)
                 if cotizacion_moneda_local:
-                    sheet.update_cell(i, 11, cotizacion_moneda_local)
-                if volumen:
-                    sheet.update_cell(i, 14, volumen)
-                if variacion_diaria:
-                    sheet.update_cell(i, 15, variacion_diaria)
-                if fuente:
-                    sheet.update_cell(i, 16, fuente)
+                    if fila_actualizar[5] == "USD":
+                        fila_actualizar[11] = cotizacion_moneda_local
+                        if fila_actualizar[12]:
+                            fila_actualizar[10] = fila_actualizar[12] * cotizacion_moneda_local 
+                    elif fila_actualizar[5] == "ARS":
+                        fila_actualizar[10] = cotizacion_moneda_local 
+                        if fila_actualizar[13]:
+                            fila_actualizar[11] = cotizacion_moneda_local / fila_actualizar[13]
+                    if fila_actualizar[7]:
+                        fila_actualizar[16] = ((cotizacion_moneda_local - fila_actualizar[7]) / fila_actualizar[7])
+                        
+                fila_actualizar[14] = convertir_a_numero(resultados.get("volumen", ""))
+                fila_actualizar[15] = resultados.get("variacion_diaria", "")
+                fila_actualizar[17] = resultados.get("fuente", "")
+
+                print(f"Actualizado {ticker} - {activo}")
+
+                if any(fila_actualizar):  # Solo actualizar si hay datos válidos
+                    sheet.update(f"A{i}:S{i}", [fila_actualizar])
+                    guardar_datos_historicos(fila_actualizar)
+                    print(f"Actualizado {ticker} - {activo}")
+                else:
+                    print(f"No se actualizaron datos para {ticker} - {activo}.")
+
+
+
+        elif activo.lower() == "bono":
+            # Implementación para actualizar información de bonos
+            print(f"Procesando {ticker} - {activo}")
+
+            resultados = obtener_datos_bono(ticker)
+
+            if resultados:
+                fila_actualizar[2] = resultados.get("nombre_completo", "")
+                fila_actualizar[3] = resultados.get("mercado", "")
+                fila_actualizar[4] = activo
+                fila_actualizar[5] = resultados.get("moneda", "")
+                fila_actualizar[6] = convertir_a_numero(resultados.get("precio_apertura", ""), ',')
+                fila_actualizar[7] = convertir_a_numero(resultados.get("precio_cierre", ""), ',')
+                fila_actualizar[8] = convertir_a_numero(resultados.get("precio_minimo", ""), ',')
+                fila_actualizar[9] = convertir_a_numero(resultados.get("precio_maximo", ""), ',')
+
+                cotizacion_moneda_local = convertir_a_numero(resultados.get("precio_actual", ""), ',')
+
+                if cotizacion_moneda_local:
+                    if cotizacion_moneda_local <= 150:
+                        fila_actualizar[11] = cotizacion_moneda_local
+                        if fila_actualizar[12]:
+                            fila_actualizar[10] = fila_actualizar[12] * cotizacion_moneda_local 
+                    elif cotizacion_moneda_local > 150:
+                        fila_actualizar[10] = cotizacion_moneda_local 
+                        if fila_actualizar[13]:
+                            fila_actualizar[11] = cotizacion_moneda_local / fila_actualizar[13]
+                    if fila_actualizar[7]:
+                        fila_actualizar[16] = ((cotizacion_moneda_local - fila_actualizar[7]) / fila_actualizar[7])
+                        
+                fila_actualizar[14] = convertir_a_numero(resultados.get("volumen", ""), ',')
+                fila_actualizar[15] = resultados.get("variacion_diaria", "")
+                fila_actualizar[17] = resultados.get("fuente", "")
+
+                print(f"Actualizado {ticker} - {activo}")
+
+                if any(fila_actualizar):  # Solo actualizar si hay datos válidos
+                    sheet.update(f"A{i}:S{i}", [fila_actualizar])
+                    guardar_datos_historicos(fila_actualizar)
+                    print(f"Actualizado {ticker} - {activo}, {fila_actualizar}")
+                else:
+                    print(f"No se actualizaron datos para {ticker} - {activo}.")
+
         else:
             print(f"Omitiendo {ticker} - {activo} (no es una acción)")
+        
+
+
+def guardar_datos_historicos(fila_historica):
+    """Guarda los datos en la hoja de Histórico de Cotizaciones."""
+    sheet_historico = get_sheet("Histórico de Cotizaciones")
+    next_row = len(sheet_historico.get_all_values()) + 1  # Encuentra la siguiente fila vacía
+    sheet_historico.append_row(fila_historica)  # Añade la fila histórica
+
+
 
 def obtener_tipo_cambio():
     # Aquí puedes implementar una función para obtener el tipo de cambio del dólar MEP
     return 945.2586  # Ejemplo estático; puedes actualizarlo dinámicamente
+
 
 def calcular_variacion_diaria(cierre_anterior, precio_actual):
     if cierre_anterior and precio_actual:
         return round(((precio_actual - cierre_anterior) / cierre_anterior) * 100, 2)
     return 0.0
 
-def convertir_a_numero(valor):
+
+def convertir_a_numero(valor, separador_decimal="."):
     try:
-        return float(valor.replace(",", ""))
-    except ValueError:
+        print(f"Convirtiendo '{valor}' a número...")
+        if isinstance(valor, str):
+            # Reemplazar caracteres específicos en función del separador decimal esperado
+            valor = valor.replace(" ", "").replace("$", "")
+            if separador_decimal == ",":
+                valor = valor.replace(".", "").replace(",", ".")
+            else:
+                valor = valor.replace(",", "")
+        # Convertir a float si es posible
+        return float(valor)
+    except (ValueError, AttributeError, TypeError):
+        # Manejar casos en que la conversión falle
+        print(f"Error al convertir '{valor}' a número.")
         return valor
+    
+

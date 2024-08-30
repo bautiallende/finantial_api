@@ -65,7 +65,17 @@ def obtener_datos_yahoo(ticker, datos):
                     resultados[key] = None
             else:
                 resultados[key] = None
+
+
+        # Extraer beta desde la estructura HTML correcta
+        beta_element = soup.find("span", text="Beta (5Y Monthly)")
+        if beta_element:
+            beta_value = beta_element.find_next("span", class_="value").text
+            resultados["beta"] = float(beta_value.replace(",", ""))
+        else:
+            resultados["beta"] = None
         
+
         # Extract additional information
         nombre_completo = soup.find("h1", class_="yf-3a2v0c").text if soup.find("h1", class_="yf-3a2v0c") else None
         mercado_moneda = soup.find("span", class_="exchange yf-1fo0o81").text if soup.find("span", class_="exchange yf-1fo0o81") else None
@@ -181,4 +191,42 @@ def obtener_datos_bono(bono):
     return bonos
 
     
+
+
+def obtener_precios_historicos_scraping(ticker):
+    """"
+    Scrapea los precios históricos de la página de Yahoo Finance.
+    :param ticker: Símbolo del activo (ej. 'YPFD.BA')
+    :return: Lista de precios de cierre.
+    """
+    url = f"https://finance.yahoo.com/quote/{ticker}/history?p={ticker}"
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        print(f"Error al obtener datos históricos: {response.status_code}")
+        return []
+
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    # Encontrar la tabla de precios históricos con la clase correcta
+    tabla = soup.find('table', {'class': 'table yf-ewueuo'})
+    
+    if tabla is None:
+        print("No se pudo encontrar la tabla de precios históricos.")
+        return []
+    
+    precios_cierre = []
+    for fila in tabla.find_all('tr')[1:]:  # Omitir la fila de encabezados
+        columnas = fila.find_all('td')
+        if len(columnas) > 5:  # Verificar que hay suficientes columnas
+            try:
+                precio_cierre = columnas[4].text.replace(',', '')  # Cerrar la columna
+                precios_cierre.append(float(precio_cierre))
+            except ValueError:
+                continue  # Omitir filas que no tienen datos válidos
+
+    return precios_cierre
 

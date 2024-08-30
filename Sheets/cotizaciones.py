@@ -1,5 +1,6 @@
 import gspread
 from utils import get_sheet, obtener_fecha_actual, obtener_datos_yahoo, obtener_cotizacion_dolar, obtener_datos_bono
+from .seguimiento_activos import actualizar_beta_para_ticker
 import time
 
 
@@ -80,6 +81,11 @@ def actualizar_cotizaciones():
                     print(f"Actualizado {ticker} - {activo}")
                 else:
                     print(f"No se actualizaron datos para {ticker} - {activo}.")
+                
+                if resultados:
+                    beta = resultados.get("beta")
+                    if beta is not None:
+                        actualizar_beta_para_ticker(ticker, beta)
 
 
 

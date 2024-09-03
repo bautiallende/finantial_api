@@ -5,7 +5,7 @@ from Sheets.seguimiento_activos import calcular_volatilidad_historica
 
 def main():
     #print("Actualizando cotizaciones...")
-    #actualizar_cotizaciones()
+    actualizar_cotizaciones()
 
     #print("Actualizando seguimiento de activos...")
     calcular_volatilidad_historica()
